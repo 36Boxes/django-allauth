@@ -4,6 +4,8 @@ import hashlib
 import json
 import time
 import warnings
+import random
+import string
 
 from django import forms
 from django.conf import settings
@@ -37,6 +39,9 @@ from ..utils import (
 )
 from . import app_settings
 
+def randomString(stringLength):
+    letters = string.ascii_lowercase
+    return ''.join(random.choice(letters) for i in range(stringLength))
 
 class DefaultAccountAdapter(object):
 
@@ -220,28 +225,40 @@ class DefaultAccountAdapter(object):
         signup form.
         """
         from .utils import user_username, user_email, user_field
+        guest_user = 'guest' + randomString(10)
+        try:
+            data = form.cleaned_data
+        except AttributeError:
+            guest0 = True
+        if guest0 is not True:
+            first_name = data.get('first_name')
+            last_name = data.get('last_name')
+            email = data.get('email')
+            username = data.get('username')
+            user_email(user, email)
+            user_username(user, username)
 
-        data = form.cleaned_data
-        first_name = data.get('first_name')
-        last_name = data.get('last_name')
-        email = data.get('email')
-        username = data.get('username')
-        user_email(user, email)
-        user_username(user, username)
-        if first_name:
-            user_field(user, 'first_name', first_name)
-        if last_name:
-            user_field(user, 'last_name', last_name)
-        if 'password1' in data:
-            user.set_password(data["password1"])
+            if first_name:
+                user_field(user, 'first_name', first_name)
+            if last_name:
+                user_field(user, 'last_name', last_name)
+            if 'password1' in data:
+                user.set_password(data["password1"])
+            else:
+                user.set_unusable_password()
+            self.populate_username(request, user)
+            if commit:
+                # Ability not to commit makes it easier to derive from
+                # this adapter by adding
+                user.save()
+            return user
         else:
-            user.set_unusable_password()
-        self.populate_username(request, user)
-        if commit:
-            # Ability not to commit makes it easier to derive from
-            # this adapter by adding
+            username = guest_user
+            user_username(user, username)
+            user.set_password(guest_user)
+            self.populate_username(request, user)
             user.save()
-        return user
+            return user
 
     def clean_username(self, username, shallow=False):
         """
